@@ -1,0 +1,297 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Grid Mapping pin generator</title>
+<style>
+div,
+img,
+p,
+body,
+html { margin: 0; padding: 0; }
+body { background: #222; color: #fff; font-family:"ヒラギノ角ゴ Pro W3", "Hiragino Kaku Gothic Pro", "メイリオ", Meiryo, Osaka, "ＭＳ Ｐゴシック", "MS PGothic", sans-serif; font-size: 14px; font-weight: normal; }
+h1{ font-size:1.1em; font-family: Arial, Helvetica, sans-serif;text-transform:capitalize; }
+a { color: #CFF; }
+input:-moz-placeholder {color:#09F;}
+input::-webkit-input-placeholder {color:#09F;}
+#container { margin: auto; padding: 20px; }
+.consoleBox { padding: 0 10px 10px; border: 1px solid #666; margin: 0 auto 20px; }
+#consoleBox{ float: left; width:400px;}
+#map { position: relative; color: red; overflow: hidden; clear: both; margin-bottom: 20px; }
+#spot { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: url(img/grid.png); }
+.point { width: 6px; height: 6px; }
+
+#output { padding: 10px; border: 1px solid #666; margin: 0 auto; margin-left: 450px;}
+#notes { color: red; font-size: 10px; }
+#info em { color: #F00; }
+#result { margin: 10px 0; padding: 8px 16px 16px; ; color: #000; background: #fff; -webkit-border-radius: 4px; border-radius: 4px; }
+#result h1 { font-size: 1.2em; }
+#fileinfo { margin-bottom: 20px; }
+#form_point{ margin-top:8px;}
+#ico { margin:0; position: relative; margin-left:30px;  }
+#ico:after { clear: both; content: ""; display: block; }
+#icoimg { background: #fff; float: left; width: 30px; height: 30px; position:absolute; top: 0; left: 0; }
+#ico #point { position: absolute; top: 0; left: 0; background: red;  }
+#spot div.spot { position: absolute; background: no-repeat; overflow: hidden; text-indent: -9999px;}
+#form_point input{ margin-right:8px;}
+#form_point h2 { font-size:1em; margin:0; width:100px;  float:left;}
+input.number{ width: 80px !important;}
+#rangeY{ float: left; width: 30px; margin-top:-6px; display: block;  -webkit-appearance: slider-vertical; }
+#rangeX{ height: 30px; width: 50px; margin: 0 0 0 24px; display: block; clear: both;}
+</style>
+</head>
+<body>
+<div id="container">
+	<div id="maploader" class="consoleBox">
+	<h1>Map file Select</h1>
+		<input type="file" id="fileElem" name="files[]" placeholder="地図画像" accept="image/*" onchange="handleFiles(this.id,this.files)" />
+		<br>
+	</div>
+	<div id="map">
+		<p id="fileimg"></p>
+		<div id="spot" onclick="getMouseXY(event)"> </div>
+	</div>
+	
+	<div id="consoleBox" class="consoleBox">
+	<h1>icon file Select</h1>
+		<div class="inner">
+		<input type="file" id="icoElem" name="files[]" placeholder="アイコン画像" accept="image/*" onchange="handleFiles(this.id,this.files)" />
+        <form id="form_point">
+        <input id="rangeY" type="range" min="0" onchange="showValue(this.id)" value="0" disabled />
+		<div id="ico">
+			<p id="icoimg"></p>
+			<p id="point"></p>
+		</div>
+
+            <input id="rangeX" type="range" min="0" onchange="showValue(this.id)" value="0" disabled />
+            <h2>Y座標調整</h2>
+            <input id="numberY" type="number" class="number" min="0" onchange="showValue(this.id)" value="0" disabled />
+            <span id="showRangeY">0</span><br>
+			<h2>X座標調整</h2>
+			<input id="numberX" type="number" class="number" min="0" onchange="showValue(this.id)" value="0" disabled />
+			<span id="showRangeX">0</span>
+		</form>
+		<div id="fileinfo"></div>
+		<form name="form2" action="">
+			開始番号が1でないときは下のフォームに開始番号を入力してください。<br>
+			※未入力は１になります<br>
+			<input name="startNum" placeholder="開始番号" class="number" type="number" min="1" value="" onchange="startNumber();"/>
+		</form>
+		</div>
+	</div>
+	<div id="output" class="consoleBox">
+		<h1>xml code output</h1>
+		<div id="notes"></div>
+		<div id="info"></div>
+		<div id="result">
+		</div>
+	</div>
+</div>
+
+
+
+<script>
+window.URL = window.URL || window.webkitURL;
+
+var isMSIE = /*@cc_on!@*/ false;
+var fileElem = getById("fileElem"),
+    map = getById("map"),
+    ico = getById("ico"),
+    icoimg = getById("icoimg"),
+    fileimg = getById("fileimg");
+
+
+var mapLaod = false;
+var icoLaod = false;
+//ファイルの読み込み
+var handleFiles = function (_id, files) {
+
+    if (files.length) {
+
+        var img = document.createElement("img");
+        img.src = window.URL.createObjectURL(files[0]);
+        if (_id == 'fileElem') {
+            img.id = 'mapimg';
+        } else if (_id == 'icoElem') {
+            img.id = 'spotimg';
+        }
+        var img_w = '',
+            img_h = '';
+//画像が読み込めたらそれぞれ処理
+        img.onload = function (e) {
+            img_w = this.width;
+            img_h = this.height;
+            window.URL.revokeObjectURL(this.src);
+
+            if (_id == 'fileElem') {
+                var info = document.createElement("span");
+                info.innerHTML = 'ファイル名：' + files[0].name + '<br>ファイル容量：' + files[0].size + ' bytes';
+                getById("fileinfo").appendChild(info);
+
+                fileimg.innerHTML = '';
+                fileimg.appendChild(img);
+                mapLaod = true;
+            } else if (_id == 'icoElem') {
+                icoimg.innerHTML = '';
+                icoimg.appendChild(img);
+                //icoimg.style.padding ='20px';
+                icoimg.style.border = '1px solid #ccc';
+                ico.style.width = icoimg.style.width = (img_w + 4)+ 'px';
+                ico.style.height = icoimg.style.height = (img_h + 4) + 'px';
+                getById('rangeX').style.width = (img_w + 18)+ 'px';
+                getById('rangeY').style.height = (img_h + 18) + 'px';
+               // getById('rangeX').style.width = img_w ;
+                getById('point').className = 'point';
+                icoLaod = true;
+                addStyleRule('#spot div.spot', 'width:' + img_w + 'px; height:' + img_h + 'px; background-image:url(' + window.URL.createObjectURL(files[0]) + ');')
+                 getById('rangeX').max = getById('numberX').max = img_w; 
+                 getById('rangeY').value = getById('rangeY').max = getById('numberY').max = img_h; 
+
+
+                var objForm = getById('form_point');
+                for (var i = 0; i < objForm.length; i++) {
+                    objForm.elements[i].disabled = false;
+                }
+
+            }
+        }
+    }
+    try {
+        if (fileLaod == true && icoLaod == true) {
+            pingenerator();
+        }
+    } catch (e) {}
+}
+
+
+
+var defx = 0;
+var defy = 0;
+var cnt = 1;
+//アイコンの設定フォーム
+showValue(rangeY),showValue(rangeX);
+function showValue(id) {
+
+    if (id.match(/range/)) {
+        defx = getById("showRangeX").innerHTML = getById("numberX").value = getById("rangeX").value;
+        defy = getById("showRangeY").innerHTML = getById("numberY").value = getById('rangeY').max - getById("rangeY").value;
+    } else {
+
+        defx = getById("showRangeX").innerHTML = getById("rangeX").value = getById("numberX").value;
+        defy = getById("rangeY").value = getById("showRangeY").innerHTML = getById("numberY").value;
+        getById("rangeY").value = getById('rangeY').max - defy;
+    }
+    getById('point').style.top = defy + 'px';
+    getById('point').style.left = defx + 'px';
+
+}
+
+
+//スタイルシート追加
+function addStyleRule(selector, declaration) {
+    var sheet;
+    if (document.styleSheets.length) {
+        sheet = document.styleSheets[document.styleSheets.length - 1];
+    } else {
+        if (isMSIE) {
+            sheet = document.createStyleSheet();
+        } else {
+            var head = document.getElementsByTagName('head')[0];
+            if (head == null) {
+                return;
+            }
+            var style = document.createElement('style');
+            head.appendChild(style);
+            sheet = style.sheet;
+        }
+    }
+
+    if (isMSIE) {
+        sheet.addRule(selector, declaration);
+    } else {
+        sheet.insertRule(selector + '{' + declaration + '}', sheet.cssRules.length);
+    }
+}
+
+//マップ上にピンを生成
+function pingenerator() {
+    getById('info').innerHTML = 'Coordinate difference by CSS Design is x=<em>' + defx + '</em>, y=<em>' + defy + '</em>.';
+    var mapimg = new Image();
+    mapimg.src = getById('map').getElementsByTagName('img').src;
+    setTimeout('mapArea() ', 500);
+}
+//マップエリア設定
+function mapArea() {
+
+    map.style.width = mapimg.offsetWidth + 'px';
+    map.style.height = mapimg.offsetHeight + 'px';
+
+    var info = document.createElement("span");
+    info.innerHTML = '<br>width：' + mapimg.offsetWidth + 'px ／ height：' + mapimg.offsetHeight + 'px'
+
+    getById("fileinfo").appendChild(info);
+}
+//開始番号
+function startNumber() {
+    startNum = document.form2.startNum.value;
+    if (!isNaN(startNum)) {
+        cnt = startNum;
+        getById('notes').innerHTML = '';
+    } else {
+        getById('notes').innerHTML = 'Please enter an integer only.';
+    }
+}
+//マップ上の座標を取得
+function getMouseXY(evt) {
+    var oj = getById('spot'),
+        x = oj.offsetLeft,
+        y = oj.offsetTop,
+        w = oj.offsetWidth,
+        h = oj.offsetHeight;
+    if (document.all) {
+        cx = event.offsetX;
+        cy = event.offsetY;
+    } else {
+        cx = evt.layerX;
+        cy = evt.layerY;
+    }
+    cx = cx - x - defx;
+    cy = cy - y - defy;
+
+    //This will grant XML code.
+    getById('result').innerHTML += '&lt;dimension pin="' + cnt + '" x="' + cx + '" y="' + cy + '" /&gt;<br>';
+
+    //This will grant the pin on the map.
+    getById('spot').innerHTML += '<div class="spot" style="top: ' + cy + 'px; left: ' + cx + 'px;"><p>SPOT</p></div>';
+    cnt++;
+}
+//開閉
+function showToggle(targetID) {
+    if (getById(targetID)) {
+        if (getById(targetID).style.display == "none") {
+            getById(targetID).style.display = "block";
+        } else {
+            getById(targetID).style.display = "none";
+        }
+    }
+}
+
+//オブジェクト取得
+function getById(id) {
+    return document.getElementById(id);
+}
+
+function getByClass(tagName, className) {
+    var tmpList = document.getElementsByTagName(tagName);
+    var targetList = new Array();
+    for (var i = 0; i < tmpList.length; i++) {
+        if (tmpList[i].className == className) {
+            targetList.push(tmpList[i]);
+        }
+    }
+    return targetList;
+}
+
+</script>
+</body>
+</html>
